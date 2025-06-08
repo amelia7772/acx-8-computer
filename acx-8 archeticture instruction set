@@ -1,0 +1,360 @@
+instruction |   op code
+(nop)                                                                       00000
+(str) (r0) (r1) (r2) (memory address in r2 highest byte, r1 lowest byte)    00001
+(movi) (r0) (immediate value)                                               00010
+(mov) (r0) (r1) (copy r0 to r1)                                             00011
+(add) (r3) (r1) (r2) (result in r3)                                         00100
+(sub) (r3) (r1) (r2) (result in r3)                                         00101
+(mul) (r3) (r1) (r2) (result in r3)                                         00110
+(div)(r3) (r1) (r2) (result in r3)                                          00111
+(divrm) (r3) (r1) (r2) (result in r3)                                       01000
+(and) (r3) (r1) (r2) (result in r3)                                         01001
+(or) (r3) (r1) (r2) (result in r3)                                          01010
+(not) (r2) (r1) (result in r2)                                              01011
+(xor) (r3) (r1) (r2) (result in r3)                                         01100
+(nand) (r3) (r1) (r2) (result in r3)                                        01101
+(nor) (r3) (r1) (r2) (result in r3)                                         01110
+(xnor) (r3) (r1) (r2) (result in r3)                                        01111
+(shfr) (r2) (r1) (result in r2)                                             10000
+(shfl) (r2) (r1) (result in r2)                                             10001
+(cmp) (r1) (r2) (result in flags)                                           10010
+(cmpi) (r0) (immediate value) (result in flags)                             10011
+(cmpz) (r0) (compares to zero)(result in flags)                             10100
+(push) (r0)                                                                 10101
+(pull) (r0)                                                                 10110
+(beq) (the address to jump to)                                              10111000
+(bne) (the address to jump to)                                              11000000
+(bgr) (the address to jump to)                                              11001000
+(ble) (the address to jump to)                                              11010000
+(bngr) (the address to jump to)                                             11011000
+(bnle) (the address to jump to)                                             11100000
+(b) (the address to jump to)                                                11101000
+
+// the branch instructions with 16 bit mode are only for binary programming, for the assembly language those are ignored
+// as the assembler expands any branch instruction in the code in ram execution mode to the code
+// movi r5, [low byte of address]
+// movi r6, [high byte of address]
+// [the 16 bit version of the branch instruction] r5, r6
+// example:
+// b end
+// expands to:
+// movi r5, [end:0]
+// movi r6, [end:1]
+// b16 r5, r6
+// and the programmer can use this full version if they choose to, as in the ram execution mode the [label:0] always expands to the first byte of a label, and [label:1] expands to the second byte of the label
+// note that calling a branch instruction in the assembler in ram execution mode should be treated carefully as the 5th and 6th registers' contents will be wiped out
+(beq16) (r1)(r2)(r1 = low byte of address, r2 = high byte)                  10111001
+(bne16) (r1)(r2)(r1 = low byte of address, r2 = high byte)                  11000001
+(bgr16) (r1)(r2)(r1 = low byte of address, r2 = high byte)                  11001001
+(ble16) (r1)(r2)(r1 = low byte of address, r2 = high byte)                  11010001
+(bngr16) (r1)(r2)(r1 = low byte of address, r2 = high byte)                 11011001
+(bnle16) (r1)(r2)(r1 = low byte of address, r2 = high byte)                 11100001
+(b16) (r1)(r2)(r1 = low byte of address, r2 = high byte)                    11101001
+
+
+(ldr) (r0) (r1) (r2) (memory address in r2 highest byte, r1 lowest byte)    11110
+(iocall) (r0) (r1) (r2) (if the 8th bit of r0 is 1 then uses r1 as the registor to write to from an input device whose ID number is specified by r0, otherwise outputs the value of r1 into the output device whose ID number is specified by r0, r2 is used to output to 16-bit devices as the high byte)                                                                       11111 
+
+Expressions:
+expressions are a way to make the assembler do math.
+expressions all start with the character '[' and end with ']'
+expressions accept 3 types of values:
+1) numbers
+2) Label pointers:
+label pointers start with the character '$' followed by a label, and optionally (only in ram execution mode) followed by the character ':' then either '0' to get the low byte of the label's byte location in the program, or '1' to get the high byte of the label's byte location in the program. in rom execution mode, or if the byte shift number is not specified (aka no ':' followed by '0' or '1'), label pointers evaluate to the low byte of the label's byte location.
+3) Byte pointers:
+there are only 2 byte pointers:
+   1) @c: evaluates to the byte location of the expression in the program
+      2) @c0: evaluates to the low byte of the byte location of the expression in the program
+      3) @c1: evaluates to the high byte of the byte location of the expression in the program
+   4) @e: evaluates to the byte location of the end of the program.
+
+expressions accept this list of operations:
+1)'+': add
+2)'-': subtract
+3)'*': multiply
+4)'/': divide (integer division)
+5)'%': get the remaining of integer division
+6)'&': bitwise logical AND
+7)'|': bitwise logical OR
+8)'^': bitwise logical XOR
+9)'<': bitwise shift left (equivilant to "<<" in C++)
+10)'>': bitwise shift right (equivilant to ">>" in C++)
+
+11*)'~': bitwise logical NOT (this is a unary operation that takes only one value and flips the bits in its binary value, and in expressions it's put on the right of the value that it's applied to, and it takes precedent over all other operations in the order of operations)
+
+Example expression:
+[$number:1 + @c - 4 * (6 / 2~)]
+this gets assembled as:
+1) replace the first term with the high byte of the byte location of the label "number": for example if the label "number" points to the hex location 0xff23, this will replace the first term with the value of hex 0xff, which is 255 in decimal:
+[255 + @c - 4 * (6 / 2~)]
+2) replace the second term with the byte location of the current expression, for example if the expression is on the 7th instruction the term will evaluate to 13:
+[255 + 14 - 4 * (6 / 2~)]
+3) do the unary operation '~' (NOT):
+[255 + 14 - 4 * (6 / -3)]
+4) perform the calculation using the PEMDAS order of operations:
+[255 + 14 - 4 * (-2)]
+[255 + 14 + 8]
+[264 + 8]
+result: 272 (invalid due to being too large for one byte)
+
+note: expressions are treated like immediate values.
+
+Directives:
+directives are instructions for the assembler that don't translate into instructions in the binary executeable.
+directives start with the character '.'
+there are 7 directives for the acx-8 assembler:
+1).org:
+is followed by 1 parameter that is an immediate value, and tells the assembler to put all the code after it in the executeavle starting in the byte location specified by its parameter, until interrupted by another org directive.
+example:
+.org 0xff00
+.string text: "Hello, world!"
+.org 0x0000
+movi r0 0
+...
+the string variable is placed from the first byte on the location hex 0xff00 in the executeable, and the movi instruction and all that follows it is placed starting at the start of the executeable.
+2).string:
+is followed by 2 parameters, the first is a variable label that must end with a ':' character which is not counted as part of the label (note that variable labels are treated the same as regular labels), and the second is a string starting with the character '"' and ending with the same character.
+the assembler puts the text byte by byte in its ascii representation (no null-terminating character), starting at the location of the directive, in the program.
+3).char:
+is followed by 2 parameters, the first is a variable label that must end with a ':' character which is not counted as part of the label (note that variable labels are treated the same as regular labels), and the second is a character surrounded by the character ' (apostrophe) at the start and closed with the same character.
+the assembler puts the character in its ascii representation at the location of the directive.
+4).byte:
+is followed by 2 parameters, the first is a variable label that must end with a ':' character which is not counted as part of the label (note that variable labels are treated the same as regular labels), and the second is an 8-bit immediate value (1 byte).
+the assembler puts the value at the location of the directive.
+5).short:
+is followed by 2 parameters, the first is a variable label that must end with a ':' character which is not counted as part of the label (note that variable labels are treated the same as regular labels), and the second is a 16-bit immediate value (2 bytes).
+the assembler puts the value byte by byte starting at the location of the directive.
+6).int:
+is followed by 2 parameters, the first is a variable label that must end with a ':' character which is not counted as part of the label (note that variable labels are treated the same as regular labels), and the second is a 32-bit immediate value (4 bytes).
+the assembler puts the value byte by byte starting at the location of the directive.
+7).long:
+is followed by 2 parameters, the first is a variable label that must end with a ':' character which is not counted as part of the label (note that variable labels are treated the same as regular labels), and the second is a 64-bit immediate value (8 bytes).
+the assembler puts the value byte by byte starting at the location of the directive.
+
+Macros:
+call (label) (is used for calling a function)
+ret (is used to return from a function to the instruction after the call to the function)
+
+call expands to:
+movi r6 (the first byte of the place of the next instruction after the macro in memory)
+push r6
+movi r6 (the second byte of the place of the next instruction after the macro, in memory)
+push r6
+movi r5 [(the label given as parameter):0]
+movi r6 [(the label given as parameter):1]
+b16 r5, r6
+
+ret expands to:
+pull r6
+pull r5
+b16 r5 r6
+
+note that call and ret only work in ram execution mode.
+
+IO device (in binary)10000001 = keyboard
+IO device (in binary)00000001 = TTY display
+IO device (in binary)00000010 = RAM program excution mode
+IO device (in binary)00000011 = ROM progeam excution mode 
+
+instr reg reg reg
+|    |  |   |  |
+00000000 00000000
+
+this archeticture has 8 general purpose registers starting from register 0, but register 7 (the 8th register) is reserved for storing flags. 
+
+registers' binary representation:
+r0 = 000
+r1 = 001
+r2 = 010
+r3 = 011
+r4 = 100
+r5 = 101
+r6 = 110
+r7 = 111 
+
+size of the stack: 256 bytes
+size of ROM: 256 bytes
+size of RAM: 65536 bytes (exactly 64 kilobytes) 
+
+1: note that any operation that updates the flags will erase what was in the flags register before, including other flags that that operation does not interact with. 
+
+2: note that any operation with more than one register requires unique (different) registers as parameters, for example:
+add r3 r1 r1
+is not allowed.
+but:
+add r3 r1 r2
+is.
+and:
+add r1 r1 r2
+is not allowed either. 
+
+3: note that each instruction is 2 bytes, and performing an instruction takes 2 clock cycles when performing the instruction from the ROM, and 3 clock cycles when performing the instruction from the RAM. 
+
+4: note that once the CPU starts (or on restarts initiated by the "run" button) it starts in ROM program execution mode at address 0 in the ROM, and to enter RAM program execution mode, the ROM needs to do an iocall with the ID of the IO device being used being 2 (binary 00000010) with the address to start execution in the RAM being given in 2 registers as paramters, and once the CPU is in RAM execution mode, it will stay in RAM execution mode, (the RAM and the ROM have two seperate program counters), until the program in the RAM does an iocall with the ID of the IO device being used being 3 (binary 00000011) with the other 2 registers being ignored as the program in the ROM will just continue execution from where it left. 
+
+binary instructions documentation: 
+
+5: note: in this documentation, "first bits" refers to highest bits, and "last" refers to lowest bits. 
+
+nop = no operation:
+waits doing nothing for 2 clock cycle if the operation is executed from the ROM, and 3 clock cycles if it is executed from the RAM. 
+
+str = store register:
+copies the contents of the register specified by the last three bits of the first byte of the instruction, into RAM at the 16-bit address specified by the contents of the register specified by the first 3 bits of the second byte of the instruction, representing the low byte of the 16-bit address, and the contents of the register specified by bits 4 and 5 and 6 of the second byte of the instruction, representing the high byte of the 16-bit address. 
+
+movi = move immediate:
+copies the second byte of the instruction into  the register specified by the last 3 bits of the first byte of the instruction, erasing what was in that register before. 
+
+mov = move
+copies the contents of the register specified by the last three bits of the first byte of the instruction, into the register specified by the first 3 bits of the second byte of the instruction, erasing what was in that register before. 
+
+add:
+adds (unsigned, hence no numbers or results less than 0) the contents of the 2 registers specified by the first 3 bits of the second byte of the instruction, and the second 3 bits (bits 4-5-6) of the second byte of the instruction, and writes the result in the register specified by the last 3 bits of the first byte of the instruction, erasing what was in that register before.
+if the result is bigger than an 8-bit unsigned number (greater than 255 decimal), sets the carry flag (3rd bit of the flag register) on, erasing what was in the flag register before. 
+
+sub = subtract:
+subtracts (unsigned, hence no numbers or results less than 0) the contents of the register specified by the first 3 bits of the second byte of the instruction, by the contents of the register specified the second 3 bits (bits 4-5-6) of the second byte of the instruction, and writes the result in the register specified by the last 3 bits of the first byte of the instruction, erasing what was in that register before.
+if the result is less than an 8-bit unsigned number (less than 255 decimal), sets the borrow flag (4th bit of the flag register) on, erasing what was in the flag register before. 
+
+mul = multiply:
+multiplies (unsigned) the contents of the 2 registers specified by the first 3 bits of the second byte of the instruction, and the second 3 bits (bits 4-5-6) of the second byte of the instruction, and writes the result in the register specified by the last 3 bits of the first byte of the instruction, erasing what was in that register before.
+if the result is bigger than an 8-bit unsigned number (greater than 255 decimal), sets the overflow flag (5th bit of the flag register) on, erasing what was in the flag register before. 
+
+div = integer divide:
+divides (integer division, throwing away the remainder, unsigned, hence no numbers or results less than 0) the contents of the register specified by the first 3 bits of the second byte of the instruction, by the contents of the register specified the second 3 bits (bits 4-5-6) of the second byte of the instruction, and writes the result in the register specified by the last 3 bits of the first byte of the instruction, erasing what was in that register before. 
+
+divrm = get integer division remainder:
+writes the remainder of dividing (integer division, throwing away the remainder, unsigned, hence no numbers or results less than 0) the contents of the register specified by the first 3 bits of the second byte of the instruction, by the contents of the register specified the second 3 bits (bits 4-5-6) of the second byte of the instruction, in the register specified by the last 3 bits of the first byte of the instruction, erasing what was in that register before. 
+
+and:
+performs the AND boolean logical operation between the bits of the contents of the register specified by the first 3 bits of the second byte of the instruction, and the bits of the contents of the register specified by the second 3 bits (bits 4-5-6) of the second byte of the instruction, and writes the result to the register specified by the last 3 bits of the first byte of the instruction, erasing the previous contents of that register. 
+
+or:
+performs the OR boolean logical operation between the bits of the contents of the register specified by the first 3 bits of the second byte of the instruction, and the bits of the contents of the register specified by the second 3 bits (bits 4-5-6) of the second byte of the instruction , and writes the result to the register specified by the last 3 bits of the first byte of the instruction, erasing the previous contents of that register. 
+
+not:
+performs the NOT boolean logical operation on the bits of the contents of the register specified by the first 3 bits of the second byte of the operation, thus inverting all the bits in the contents of that register, and writes the result to the register specified by the last 3 bits of the first byte of the instruction, erasing the previous contents of that register. 
+
+xor:
+performs the XOR boolean logical operation between the bits of the contents of the register specified by the first 3 bits of the second byte of the instruction, and the bits of the contents of the register specified by the second 3 bits (bits 4-5-6) of the second byte of the instruction, and writes the result to the register specified by the last 3 bits of the first byte of the instruction, erasing the previous contents of that register. 
+
+nand:
+performs the NAND boolean logical operation between the bits of the contents of the register specified by the first 3 bits of the second byte of the instruction, and the bits of the contents of the register specified by the second 3 bits (bits 4-5-6) of the second byte of the instruction, and writes the result to the register specified by the last 3 bits of the first byte of the instruction, erasing the previous contents of that register. 
+
+nor:
+performs the NOR boolean logical operation between the bits of the contents of the register specified by the first 3 bits of the second byte of the instruction, and the bits of the contents of the register specified by the second 3 bits (bits 4-5-6) of the second byte of the instruction, and writes the result to the register specified by the last 3 bits of the first byte of the instruction, erasing the previous contents of that register. 
+
+xnor:
+performs the XNOR boolean logical operation between the bits of the contents of the register specified by the first 3 bits of the second byte of the instruction, and the bits of the contents of the register specified by the second 3 bits (bits 4-5-6) of the second byte of the instruction, and writes the result to the register specified by the last 3 bits of the first byte of the instruction, erasing the previous contents of that register. 
+
+shfr = shift right:
+shifts the contents of the register specified by the first 3 bits of the second byte of the instruction to the right by one bit, and writes the results in the register specified by the last 3 bits of the first byte of the instruction, erasing what was in that register before.
+if the lowest bit of the contents being shifted to the right is 1, this instruction sets the overflow flag (the 5th bit of the flag register) on, erasing what was in the flag register before. 
+
+shfl = shift left:
+shifts the contents of the register specified by the first 3 bits of the second byte of the instruction to the left one bit, and writes the results in the register specified by the last 3 bits of the first byte of the instruction, erasing what was in that register before.
+if the highest bit of the contents being shifted to the left is 1, this instruction sets the overflow flag (the 5th bit of the flag register) on, erasing what was in the flag register before. 
+
+cmp = compare:
+compares the contents of the register specified by the last 3 bits of the first byte of the instruction, to the contents of the register specified by the first three bits if the second byte of the instruction.
+if the first register's contents are greater than the second register contents, this instruction sets the greater than flag (the 6th bit of the flags register) on, erasing what was in the flag register before.
+if the first register's contents are less than the second register contents, this instruction sets the less than flag (the 7th bit of the flags register) on, erasing what was in the flag register before.
+if the first register's contents are equal to the second register contents, this instruction sets the equal to flag (the 8th bit of the flags register) on, erasing what was in the flag register before. 
+
+cmpi = compare to immediate value:
+compares the contents of the register specified by the last 3 bits of the first byte of the instruction to the value of the second byte of the instruction.
+if the register's contents are greater than the immediate value, this instruction sets the greater than flag (the 6th bit of the flags register) on, erasing what was in the flag register before.
+if the register's contents are less than the immediate value, this instruction sets the less than flag (the 7th bit of the flags register) on, erasing what was in the flag register before.
+if the register's contents are equal to the immediate value, this instruction sets the equal to flag (the 8th bit of the flags register) on, erasing what was in the flag register before. 
+
+cmpz = compare to zero:
+compares the contents of the register specified by the last 3 bits of the first byte of the instruction to the number zero.
+if the register's contents are greater than zero, this instruction sets the greater than flag (the 6th bit of the flags register) on, erasing what was in the flag register before.
+if the register's contents are less than zero, this instruction sets the less than flag (the 7th bit of the flags register) on, erasing what was in the flag register before.
+if the register's contents are equal to zero, this instruction sets the equal to flag (the 8th bit of the flags register) on, erasing what was in the flag register before. 
+
+push:
+pushes the contents of the register specified by the last 3 bits of the first byte of the instruction, onto the stack, and increases the value of the stack pointer by 1. 
+
+pull:
+pulls the last thing that was pushed onto the stack from the stack onto register specified by the last 3 bits of the first byte of the instruction, erasing what was in that register before, and decreasing the value of the stack pointer by 1. 
+
+beq = branch if equal (only works in ROM execution mode):
+jumps to the address specified by the second byte of the instruction, only if the flags register's contents equal 128, thus the "equal to" flag is set on, and only the "equal to" flag is set on. 
+
+beq = branch if equal (only works in ROM execution mode):
+jumps to the address specified by the second byte of the instruction, only if the flags register's contents equal 128, thus the "equal to" flag is set on, and only the "equal to" flag is set on. 
+
+beq = branch if equal (only works in ROM execution mode):
+jumps to the address specified by the second byte of the instruction, if the "equal to" flag is set on. (don't call without calling cmp, or cmpi, or cmpz, as the behavior in that case is undefined). 
+
+bne = branch if not equal (only works in ROM execution mode):
+jumps to the address specified by the second byte of the instruction, if the "equal to" flag is not set on (/is set off). (don't call without calling cmp, or cmpi, or cmpz, as the behavior in that case is undefined). 
+
+bgr = branch if greater than (only works in ROM execution mode):
+jumps to the address specified by the second byte of the instruction, if the "greater than" flag is set on. (don't call without calling cmp, or cmpi, or cmpz right before it, as the behavior in that case is undefined). 
+
+ble = branch if less than (only works in ROM execution mode):
+jumps to the address specified by the second byte of the instruction, if the "less than" flag is set on. (don't call without calling cmp, or cmpi, or cmpz right before it, as the behavior in that case is undefined). 
+
+bngr = branch if not greater than (only works in ROM execution mode):
+jumps to the address specified by the second byte of the instruction, if the "greater than" flag is not set on (/is set off). (don't call without calling cmp, or cmpi, or cmpz right before it, as the behavior in that case is undefined). 
+
+bnle = branch if not less than (only works in ROM execution mode):
+jumps to the address specified by the second byte of the instruction, if the "less than" flag is not set on (/is set off). (don't call without calling cmp, or cmpi, or cmpz right before it, as the behavior in that case is undefined). 
+
+b = branch (only works in ROM execution mode):
+jumps to the address specified by the second byte of the instruction, unconditionally. 
+
+beq16 = branch if equal 16-bit mode (only works in RAM execution mode):
+jumps to the address specified by the contents of the register specified by the first 3 bits of the second byte of the instruction as the low byte of the address, and the contents of the register specified by the second 3 bits (bits 4-5-6) of the second byte of the instructionas the high byte of the address, if the "equal to" flag is set on. (don't call without calling cmp, or cmpi, or cmpz, as the behavior in that case is undefined). 
+
+bne16 = branch if not equal 16-bit mode (only works in RAM execution mode):
+jumps to the address specified by the contents of the register specified by the first 3 bits of the second byte of the instruction as the low byte of the address, and the contents of the register specified by the second 3 bits (bits 4-5-6) of the second byte of the instructionas the high byte of the address, if the "equal to" flag is not set on (/is set off). (don't call without calling cmp, or cmpi, or cmpz, as the behavior in that case is undefined). 
+
+bgr16 = branch if greater than 16-bit mode (only works in RAM execution mode):
+jumps to the address specified by the contents of the register specified by the first 3 bits of the second byte of the instruction as the low byte of the address, and the contents of the register specified by the second 3 bits (bits 4-5-6) of the second byte of the instructionas the high byte of the address, if the "greater than" flag is set on. (don't call without calling cmp, or cmpi, or cmpz, as the behavior in that case is undefined). 
+
+ble16 = branch if less than 16-bit mode (only works in RAM execution mode):
+jumps to the address specified by the contents of the register specified by the first 3 bits of the second byte of the instruction as the low byte of the address, and the contents of the register specified by the second 3 bits (bits 4-5-6) of the second byte of the instructionas the high byte of the address, if the "less than" flag is set on. (don't call without calling cmp, or cmpi, or cmpz, as the behavior in that case is undefined). 
+
+bngr16 = branch if not greater than 16-bit mode (only works in RAM execution mode):
+jumps to the address specified by the contents of the register specified by the first 3 bits of the second byte of the instruction as the low byte of the address, and the contents of the register specified by the second 3 bits (bits 4-5-6) of the second byte of the instructionas the high byte of the address, if the "greater than" flag is not set on (/is set off). (don't call without calling cmp, or cmpi, or cmpz, as the behavior in that case is undefined). 
+
+bnle16 = branch if not less than 16-bit mode (only works in RAM execution mode):
+jumps to the address specified by the contents of the register specified by the first 3 bits of the second byte of the instruction as the low byte of the address, and the contents of the register specified by the second 3 bits (bits 4-5-6) of the second byte of the instructionas the high byte of the address, if the "less than" flag is not set on (/is set off). (don't call without calling cmp, or cmpi, or cmpz, as the behavior in that case is undefined). 
+
+b16 = branch 16-bit mode (only works in RAM execution mode):
+jumps to the address specified by the contents of the register specified by the first 3 bits of the second byte of the instruction as the low byte of the address, and the contents of the register specified by the second 3 bits (bits 4-5-6) of the second byte of the instructionas the high byte of the address, unconditionally. 
+
+ldr = load to register:
+loads into the register specified by the last three bits of the first byte of the instruction, the value in RAM at the 16-bit address specified by the contents of the register specified by the first 3 bits of the second byte of the instruction, representing the low byte of the 16-bit address, and the contents of the register specified by bits 4 and 5 and 6 of the second byte of the instruction, representing the high byte of the 16-bit address, erasing the previous contents of the register it writes to. 
+
+iocall = call input/output:
+calls an input/output device, whose ID is specified by the contents of the register specified by the last 3 bits of the first byte of the instruction, using the register specified by the first 3 bits of the second byte of the instruction, and the register specified by tye second 3 bits (bits 4-5-6) of the second byte of the instruction, if it's an input device (if the highest bit of its ID is on) as the registers to write the value comming from the input device to, and if it's an output device as the registers containing the value to be outputted to the output device, and in both cases the first of the two registers would be the low byte, and the second would be the high byte.
+6: note that this instruction can be used to change the current mode of execution, to learn more refer back to note 4.
+7: note that any output device or input device that have an 8-bit data bus will ignore the register for the high byte.
+
+example program:
+
+Hello_world:
+.org 0xff00
+.string text: "Hello, world!"
+.byte end_of_text: 0
+.org 0x0000
+
+movi r1 [$text:0]
+movi r2 [$text:1]
+movi r3 1
+loop:
+ldr r0 r1 r2
+iocall r3 r0 r2
+add r4 r3 r1
+mov r4 r1
+
+cmpz r0
+bne loop
+
+halt:
+b halt
