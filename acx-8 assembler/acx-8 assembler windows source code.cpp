@@ -81,7 +81,7 @@ struct Expression_token {
 vector<Expression_token>* expression_tokens = new vector<Expression_token>();
 
 vector<string>* byte_pointers = new vector<string>{
-	"@c"
+	"@c",
 	"@c0",
 	"@c1",
 	"@e"
