@@ -634,8 +634,8 @@ int main() {
 
 	atexit(deallocate_reserved_memory_and_save);
 
-	chrono::steady_clock::time_point start;
-	chrono::steady_clock::time_point end;
+	chrono::system_clock::time_point start;
+	chrono::system_clock::time_point end;
 
 	start = std::chrono::high_resolution_clock::now();
 	while (true) {
