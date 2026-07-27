@@ -2832,7 +2832,10 @@ bool assemble_the_code() {
 	check_the_validity_of_tokens();
 	expand_macros();
 	locate_tokens_byte_locations();
-	delete expression_tokens;
+	if(expression_tokens != nullptr){
+                delete expression_tokens;
+                expression_tokens = nullptr;
+    }
 	expression_tokens = new vector<Expression_token>;
 	lex_the_expressions();
 	parse_expressions();
@@ -2959,8 +2962,14 @@ int main(int number_of_args, char* args[]) {
 				deallocate_memory();
 				return 1;
 			}
-			delete code_text;
-			delete original_code_text;
+			if(code_text != nullptr){
+                delete code_text;
+                code_text = nullptr;
+            }
+            if(original_code_text != nullptr){
+                delete original_code_text;
+                original_code_text = nullptr;
+            }
 			code_text = new string();
 		}
 	}
