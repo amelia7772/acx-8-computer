@@ -78,6 +78,7 @@ enum IO_devices_IDs{
 };
 
 void disable_echoing_user_input() {
+	setvbuf(stdout, NULL, _IONBF, 0);
 	HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
 	DWORD mode = 0;
 	GetConsoleMode(hStdin, &mode);
