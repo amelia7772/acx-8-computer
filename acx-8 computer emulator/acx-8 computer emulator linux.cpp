@@ -84,6 +84,7 @@ enum IO_devices_IDs{
 };
 
 void disable_echoing_user_input() {
+	setvbuf(stdout, NULL, _IONBF, 0);
 	struct termios newt;
 	tcgetattr(STDIN_FILENO, &newt); // Get current terminal settings
 	newt.c_lflag &= ~(ICANON | ECHO); // Disable canonical mode and echo
